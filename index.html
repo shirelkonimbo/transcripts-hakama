@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>תמלול קבצי שמע</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+      color: #1a1a2e;
+    }
+
+    h1 { font-size: 1.9rem; font-weight: 700; margin-bottom: 6px; }
+    .subtitle { color: #6b7280; margin-bottom: 32px; font-size: 0.95rem; }
+
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+      padding: 36px;
+      width: 100%;
+      max-width: 660px;
+    }
+
+    /* ——— Drop zone ——— */
+    #drop-zone {
+      border: 2px dashed #d1d5db;
+      border-radius: 14px;
+      padding: 52px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    #drop-zone.drag-over { border-color: #6366f1; background: #f5f3ff; }
+    #drop-zone.has-file  { border-color: #6366f1; border-style: solid; }
+    #drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon { font-size: 3.2rem; display: block; margin-bottom: 14px; }
+    #drop-zone strong { font-size: 1.1rem; color: #374151; }
+    #drop-zone p { color: #9ca3af; font-size: 0.88rem; margin-top: 6px; }
+    #file-name { margin-top: 14px; font-size: 0.92rem; color: #6366f1; font-weight: 600; min-height: 20px; }
+
+    /* ——— Button ——— */
+    #upload-btn {
+      display: block; width: 100%; margin-top: 22px; padding: 15px;
+      background: #6366f1; color: #fff; border: none; border-radius: 12px;
+      font-size: 1.08rem; font-weight: 700; cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    #upload-btn:hover:not(:disabled) { background: #4f46e5; }
+    #upload-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ——— Steps ——— */
+    #steps { margin-top: 30px; display: none; }
+    .step { display: flex; align-items: flex-start; gap: 14px; padding: 16px 0; border-bottom: 1px solid #f3f4f6; }
+    .step:last-child { border-bottom: none; }
+    .step-icon {
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.95rem; font-weight: 700; flex-shrink: 0;
+      background: #f3f4f6; color: #9ca3af; transition: background 0.25s, color 0.25s;
+    }
+    .step-icon.active { background: #ede9fe; color: #6366f1; }
+    .step-icon.done   { background: #d1fae5; color: #059669; }
+    .step-icon.error  { background: #fee2e2; color: #dc2626; }
+    .step-label  { font-size: 0.96rem; font-weight: 600; color: #374151; }
+    .step-detail { font-size: 0.82rem; color: #9ca3af; margin-top: 3px; min-height: 17px; }
+
+    .progress-wrap { height: 6px; background: #e5e7eb; border-radius: 3px; margin-top: 9px; overflow: hidden; display: none; }
+    .progress-bar  { height: 100%; background: #6366f1; border-radius: 3px; width: 0%; transition: width 0.25s; }
+
+    /* ——— Result ——— */
+    #result-section { margin-top: 30px; display: none; }
+    #result-section h2 { font-size: 1.08rem; margin-bottom: 12px; color: #374151; }
+    #transcript-box {
+      white-space: pre-wrap; background: #f9fafb; border: 1px solid #e5e7eb;
+      border-radius: 12px; padding: 20px; font-size: 0.95rem; line-height: 1.75;
+      max-height: 420px; overflow-y: auto; direction: rtl; color: #1f2937;
+    }
+    .result-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    #download-btn {
+      padding: 10px 22px; background: #059669; color: #fff; border: none;
+      border-radius: 8px; font-size: 0.92rem; font-weight: 600; cursor: pointer; transition: background 0.2s;
+    }
+    #download-btn:hover { background: #047857; }
+    #reset-btn {
+      padding: 10px 22px; background: #f3f4f6; border: 1px solid #d1d5db;
+      border-radius: 8px; font-size: 0.92rem; font-weight: 600; cursor: pointer; color: #374151; transition: background 0.2s;
+    }
+    #reset-btn:hover { background: #e5e7eb; }
+
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2.5px solid #e5e7eb; border-top-color: #6366f1;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<h1>🎙️ תמלול קבצי שמע</h1>
+<p class="subtitle">MP3 / MP4 → n8n → S3 → Soniox → טקסט בעברית</p>
+
+<div class="card">
+
+  <div id="drop-zone">
+    <input type="file" id="file-input" accept=".mp3,.mp4,audio/mpeg,video/mp4,audio/mp4" />
+    <span class="upload-icon">📁</span>
+    <strong>גרור קובץ לכאן</strong>
+    <p>או לחץ לבחירה &nbsp;·&nbsp; MP3 / MP4 &nbsp;·&nbsp; עד 700MB</p>
+    <div id="file-name"></div>
+  </div>
+
+  <button id="upload-btn" disabled>בחר קובץ תחילה</button>
+
+  <div id="steps">
+    <div class="step">
+      <div class="step-icon" id="icon-upload">1</div>
+      <div style="flex:1">
+        <div class="step-label">שליחת הקובץ</div>
+        <div class="step-detail" id="detail-upload"></div>
+        <div class="progress-wrap" id="progress-wrap">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon" id="icon-transcribe">2</div>
+      <div>
+        <div class="step-label">עיבוד ותמלול</div>
+        <div class="step-detail" id="detail-transcribe"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="result-section">
+    <h2>📝 תמלול</h2>
+    <div id="transcript-box"></div>
+    <div class="result-actions">
+      <button id="download-btn">⬇️ הורד TXT</button>
+      <button id="reset-btn">העלה קובץ נוסף</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ================================================================
+  // הדבק כאן את ה-Webhook URLs מ-n8n
+  // ================================================================
+  const N8N_GET_UPLOAD_URL = 'https://connect.konimbo.co.il/webhook/get-upload-url';
+  const N8N_WEBHOOK = 'https://connect.konimbo.co.il/webhook/transcribe';
+  const N8N_STATUS_WEBHOOK = 'https://connect.konimbo.co.il/webhook/transcribe-status';
+  // ================================================================
+
+  let selectedFile = null;
+
+  const dropZone  = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const uploadBtn = document.getElementById('upload-btn');
+
+  function setFile(file) {
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['mp3', 'mp4'].includes(ext)) { alert('יש לבחור קובץ MP3 או MP4 בלבד'); return; }
+    selectedFile = file;
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    document.getElementById('file-name').textContent = `${file.name} · ${mb} MB`;
+    dropZone.classList.add('has-file');
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = 'העלה ותמלל ←';
+  }
+
+  fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); setFile(e.dataTransfer.files[0]); });
+
+  // ——— Step helpers ———
+  function stepActive(id, text) {
+    const el = document.getElementById('icon-' + id);
+    el.className = 'step-icon active';
+    el.innerHTML = '<span class="spinner"></span>';
+    setDetail(id, text);
+  }
+  function stepDone(id, text) {
+    const el = document.getElementById('icon-' + id);
+    el.className = 'step-icon done';
+    el.textContent = '✓';
+    setDetail(id, text);
+  }
+  function stepError(id, text) {
+    const el = document.getElementById('icon-' + id);
+    el.className = 'step-icon error';
+    el.textContent = '✗';
+    setDetail(id, text);
+  }
+  function setDetail(id, text) {
+    if (text !== undefined) document.getElementById('detail-' + id).textContent = text;
+  }
+
+  // ——— Poll status endpoint until transcription completes ———
+  function pollTranscript(id, onTick) {
+    const start = Date.now();
+    return new Promise((resolve, reject) => {
+      async function check() {
+        try {
+          const res = await fetch(`${N8N_STATUS_WEBHOOK}?id=${encodeURIComponent(id)}`);
+          if (!res.ok) throw new Error(`שגיאת שרת בבדיקת סטטוס (${res.status})`);
+          const data = await res.json();
+
+          if (data.status === 'completed') { resolve(data.transcript ?? ''); return; }
+          if (data.status === 'error') { reject(new Error(data.error || 'שגיאה בתמלול')); return; }
+
+          const sec = Math.round((Date.now() - start) / 1000);
+          const m = Math.floor(sec / 60), s = sec % 60;
+          const elapsed = m > 0 ? `${m}:${String(s).padStart(2, '0')} דקות` : `${sec} שניות`;
+          onTick(`מעבד (${data.status})... ${elapsed}`);
+          setTimeout(check, 5000);
+        } catch (err) {
+          reject(err);
+        }
+      }
+      check();
+    });
+  }
+
+  // ——— Step 1: ask n8n for a presigned S3 upload URL (tiny JSON request) ———
+  async function getUploadUrl(filename) {
+    const res = await fetch(N8N_GET_UPLOAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename })
+    });
+    if (!res.ok) throw new Error(`שגיאה בקבלת קישור העלאה (${res.status})`);
+    let data;
+    try { data = await res.json(); }
+    catch { throw new Error('תגובה לא תקינה מ-n8n בקבלת קישור העלאה'); }
+    if (!data.uploadUrl || !data.key) throw new Error('לא התקבל קישור העלאה תקין מ-n8n');
+    return data;
+  }
+
+  // ——— Step 2: upload the raw file directly to S3 with XHR progress ———
+  function uploadToS3(file, uploadUrl, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl);
+
+      xhr.upload.addEventListener('progress', e => {
+        if (e.lengthComputable) {
+          const pct = (e.loaded / e.total * 100).toFixed(0);
+          onProgress(pct);
+        }
+      });
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error(`שגיאת העלאה ל-S3 (${xhr.status}): ${xhr.responseText.slice(0, 300)}`));
+      };
+      xhr.onerror = () => reject(new Error('שגיאת רשת בהעלאה ל-S3'));
+      xhr.send(file);
+    });
+  }
+
+  // ——— Step 3: tell n8n the file is on S3, get back a Soniox job id ———
+  async function startTranscription(key) {
+    const res = await fetch(N8N_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
+    });
+    if (!res.ok) throw new Error(`שגיאה בהתחלת תמלול (${res.status})`);
+    let data;
+    try { data = await res.json(); }
+    catch { throw new Error('תגובה לא תקינה מ-n8n בהתחלת תמלול'); }
+    if (!data.id) throw new Error('לא התקבל מזהה עבודה מ-n8n');
+    return data.id;
+  }
+
+  // ——— Main ———
+  uploadBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'מעבד...';
+    document.getElementById('steps').style.display = 'block';
+    document.getElementById('result-section').style.display = 'none';
+
+    try {
+      // שלב 1: קבלת קישור העלאה חתום מ-n8n
+      stepActive('upload', 'מכין קישור העלאה...');
+      document.getElementById('progress-wrap').style.display = 'block';
+
+      const { uploadUrl, key } = await getUploadUrl(selectedFile.name);
+
+      // שלב 2: העלאה ישירה ל-S3 (עוקף את n8n לגמרי)
+      await uploadToS3(selectedFile, uploadUrl, pct => {
+        document.getElementById('progress-bar').style.width = pct + '%';
+        setDetail('upload', `מעלה... ${pct}%`);
+      });
+      stepDone('upload', 'הקובץ הועלה ✓');
+
+      // שלב 3: התחלת תמלול
+      stepActive('transcribe', 'שולח לתמלול...');
+      const id = await startTranscription(key);
+
+      // שלב 4: פולינג לסטטוס עד לסיום התמלול
+      const transcript = await pollTranscript(id, text => setDetail('transcribe', text));
+      stepDone('transcribe', 'התמלול הושלם ✨');
+
+      // תוצאה
+      document.getElementById('transcript-box').textContent = transcript;
+      document.getElementById('result-section').style.display = 'block';
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'העלה קובץ נוסף';
+
+    } catch (err) {
+      const active = ['upload', 'transcribe'].find(id =>
+        document.getElementById('icon-' + id).classList.contains('active')
+      );
+      if (active) stepError(active, err.message);
+      console.error(err);
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'נסה שוב';
+    }
+  });
+
+  // ——— Download ———
+  document.getElementById('download-btn').addEventListener('click', () => {
+    const text = document.getElementById('transcript-box').textContent;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    a.download = (selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'transcript') + '_transcript.txt';
+    a.click();
+  });
+
+  // ——— Reset ———
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    selectedFile = null;
+    fileInput.value = '';
+    document.getElementById('file-name').textContent = '';
+    dropZone.classList.remove('has-file');
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'בחר קובץ תחילה';
+    document.getElementById('steps').style.display = 'none';
+    document.getElementById('result-section').style.display = 'none';
+    document.getElementById('progress-wrap').style.display = 'none';
+    document.getElementById('progress-bar').style.width = '0%';
+    ['upload','transcribe'].forEach((id, i) => {
+      const el = document.getElementById('icon-' + id);
+      el.className = 'step-icon';
+      el.textContent = i + 1;
+      setDetail(id, '');
+    });
+  });
+</script>
+</body>
+</html>

@@ -110,15 +110,15 @@
 <body>
 
 <h1>🎙️ תמלול קבצי שמע</h1>
-<p class="subtitle">MP3 / MP4 → n8n → S3 → Soniox → טקסט בעברית</p>
+<p class="subtitle">n8n → S3 → Soniox → טקסט בעברית</p>
 
 <div class="card">
 
   <div id="drop-zone">
-    <input type="file" id="file-input" accept=".mp3,.mp4,audio/mpeg,video/mp4,audio/mp4" />
+    <input type="file" id="file-input" />
     <span class="upload-icon">📁</span>
     <strong>גרור קובץ לכאן</strong>
-    <p>או לחץ לבחירה &nbsp;·&nbsp; MP3 / MP4 &nbsp;·&nbsp; עד 700MB</p>
+    <p>או לחץ לבחירה &nbsp;·&nbsp; כל סוג קובץ שמע/וידאו &nbsp;·&nbsp; עד 700MB</p>
     <div id="file-name"></div>
   </div>
 
@@ -172,8 +172,6 @@
 
   function setFile(file) {
     if (!file) return;
-    const ext = file.name.split('.').pop().toLowerCase();
-    if (!['mp3', 'mp4'].includes(ext)) { alert('יש לבחור קובץ MP3 או MP4 בלבד'); return; }
     selectedFile = file;
     const mb = (file.size / 1024 / 1024).toFixed(1);
     document.getElementById('file-name').textContent = `${file.name} · ${mb} MB`;
